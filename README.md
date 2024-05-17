@@ -237,36 +237,9 @@ SQLAlchemy is a SQL toolkit and Object-Relational Mapping (ORM) system for Pytho
 
 - **Jinja2:** Introduction to Jinja2 for rendering real-time data updates on the frontend using server-side templating.
 
-**3. Demo: Real-Time Financial Dashboard:**
-  - **Use Case:** A dynamic financial dashboard that displays real-time stock prices on a web page. The dashboard updates automatically, providing users with up-to-the-minute financial data without needing to manually refresh the page.
+**3. Demo: Energy Monitoring Dashboard:**
 
-## Architecture
-
-- **FastAPI app for backend**: FastAPI is a modern, fast (high-performance), web framework for building APIs with Python 3.6+ based on standard Python type hints. It's designed to be easy to use, while also enabling high performance. In this setup, FastAPI is used to handle all backend operations, including serving web pages, handling requests, and interacting with the database.
-
-- **PostgreSQL as the database system**: PostgreSQL is a powerful, open-source object-relational database system. It's known for its robustness, functionality, and standards-compliance. In this setup, PostgreSQL is used to store and retrieve data for the application.
-
-- **SQLAlchemy for database operations**: SQLAlchemy is a SQL toolkit and Object-Relational Mapping (ORM) system for Python. It provides a full suite of well-known enterprise-level persistence patterns, designed for efficient and high-performing database access. In this setup, SQLAlchemy is used to interact with the PostgreSQL database in a Pythonic way.
-
-- **SSE for sending updates to the frontend**: Server-Sent Events (SSE) is a standard that allows a web server to push updates to the client over HTTP. In this setup, SSE is used to send real-time updates from the server (Flask app) to the client (web browser).
-
-- **HTMX for handling updates on the frontend with minimal JavaScript**: HTMX is a modern HTML-first, JavaScript-second library for building AJAX-driven web applications. It allows you to access AJAX, CSS Transitions, WebSockets and Server Sent Events directly in HTML, using attributes, so you can build modern user interfaces with the simplicity and power of hypertext. In this setup, HTMX is used to handle the updates sent from the server and update the HTML content dynamically.
-
-- **Jinja2 templates to render initial HTML with data from Python**: Jinja2 is a modern and designer-friendly templating language for Python. It's used for creating HTML templates that can be rendered with data from Python. In this setup, Jinja2 is used to render the initial HTML of the web pages, filling in data from the Flask app.
-
-
-```mermaid
-graph LR
-  A[Python Flask App] -->|Fetches Data| B[PostgreSQL]
-  A -->|Sends Updates| C[SSE]
-  B -->|Database Operations| D[SQLAlchemy]
-  C -->|Updates Frontend| E[HTMX]
-  A -->|Renders Initial HTML| F[Jinja2]
-```
-
-To set up an energy monitoring dashboard that utilizes a real-time API, follows the integration of the technologies you mentioned. This setup involves using FastAPI to handle backend operations and SSE for pushing updates, with HTMX on the frontend for seamless updates without refreshing the page.
-
-### Energy Monitoring Dashboard:
+- **Use Case:** Create a dynamic energy monitoring dashboard that displays real-time energy consumption data on a web page. The dashboard should update automatically, providing users with up-to-date information about energy usage without needing to manually refresh the page.
 
 #### Environment Setup
 First, ensure you have Python installed. Create a new project directory and set up a virtual environment:
