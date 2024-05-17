@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  db:
+    build:
+      context: .
+      dockerfile: Dockerfile-db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: energydb
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile-app
+    volumes:
+      - .:/code
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql+asyncpg://user:password@db/energydb
+
+volumes:
+  pgdata:
