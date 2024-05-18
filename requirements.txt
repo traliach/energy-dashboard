@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlalchemy
+databases
+asyncpg
+htmx
+jinja2
+httpx
+psycopg2-binary
+alembic

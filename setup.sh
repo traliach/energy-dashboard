@@ -11,8 +11,20 @@ cd $PROJECT_DIR
 python3 -m venv venv
 source venv/bin/activate
 
-# Install required Python packages
-pip install fastapi uvicorn sqlalchemy asyncpg htmx jinja2
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Initialize Alembic
+alembic init alembic
+
+# Replace the sqlalchemy.url in alembic.ini
+sed -i 's|sqlalchemy.url = .*|sqlalchemy.url = postgresql://user:password@db/energydb|' alembic/alembic.ini
+
+# Generate a migration script
+alembic revision --autogenerate -m "Initial migration"
+
+# Apply the migration
+alembic upgrade head
 
 # Running the server
 echo "Starting the server..."

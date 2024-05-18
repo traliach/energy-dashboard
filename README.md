@@ -235,152 +235,23 @@ SQLAlchemy is a SQL toolkit and Object-Relational Mapping (ORM) system for Pytho
 3. **Overhead**: The abstraction provided by SQLAlchemy introduces some overhead, which might not be ideal for applications that require maximum performance.
 
 
-- **Jinja2:** Introduction to Jinja2 for rendering real-time data updates on the frontend using server-side templating.
+## Jinja2
+Jinja2 is a powerful templating engine for Python that allows you to generate dynamic HTML, XML, or other markup formats. It provides a flexible and efficient way to render data on the server-side and generate dynamic content for web applications.
 
-**3. Demo: Energy Monitoring Dashboard:**
+Jinja2 is inspired by Django's template engine and is widely used in web development with frameworks like Flask and Django. It separates the presentation logic from the business logic, making it easier to maintain and update the frontend of your application.
 
-- **Use Case:** Create a dynamic energy monitoring dashboard that displays real-time energy consumption data on a web page. The dashboard should update automatically, providing users with up-to-date information about energy usage without needing to manually refresh the page.
+**Use Case**: Jinja2 is commonly used in scenarios where you need to render dynamic content on the server-side. It's particularly useful for generating HTML pages with dynamic data, such as displaying user information, generating reports, or rendering real-time updates.
 
-#### Environment Setup
-First, ensure you have Python installed. Create a new project directory and set up a virtual environment:
+**Pros**:
+1. **Flexible and Expressive**: Jinja2 provides a rich set of features, including conditionals, loops, filters, and macros, allowing you to create complex templates with ease.
+2. **Separation of Concerns**: By separating the presentation logic from the business logic, Jinja2 promotes clean code architecture and maintainability.
+3. **Extensibility**: Jinja2 allows you to define custom filters, functions, and tags, giving you full control over the template rendering process.
+4. **Integration with Python**: Since Jinja2 is written in Python, it seamlessly integrates with Python code, making it easy to pass data from the backend to the templates.
 
-```bash
-mkdir energy_dashboard
-cd energy_dashboard
-python -m venv venv
-source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-```
+**Cons**:
+1. **Learning Curve**: Jinja2 has its own syntax and concepts, so there is a learning curve involved in understanding and using it effectively.
+2. **Limited Frontend Interactivity**: Jinja2 is primarily focused on server-side rendering, so it may not be the best choice for highly interactive frontend components that require frequent updates without page reloads. In such cases, a JavaScript framework like React or Vue.js might be more suitable.
 
-Install the required packages:
-
-```bash
-pip install fastapi uvicorn sqlalchemy asyncpg htmx jinja2
-```
-
-#### Define the Database Model with SQLAlchemy
-Create a file called `models.py` to define your database schema:
-
-```python
-from sqlalchemy import Column, Integer, Float, String, DateTime, create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-import datetime
-
-Base = declarative_base()
-
-class EnergyData(Base):
-    __tablename__ = 'energy_data'
-    id = Column(Integer, primary_key=True)
-    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
-    energy_consumption = Column(Float)
-    unit = Column(String)
-
-# Database connection
-ENGINE = create_engine("postgresql+asyncpg://user:password@localhost/energydb")
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=ENGINE)
-
-Base.metadata.create_all(bind=ENGINE)
-```
-
-Replace `"postgresql+asyncpg://user:password@localhost/energydb"` with your actual database credentials.
-
-#### Create FastAPI App
-Set up the FastAPI application in a file called `main.py`:
-
-```python
-from fastapi import FastAPI, Depends, HTTPException
-from sqlalchemy.orm import Session
-from models import SessionLocal, EnergyData
-import datetime
-
-app = FastAPI()
-
-# Dependency
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-@app.post("/data/")
-async def create_energy_data(energy_consumption: float, unit: str, db: Session = Depends(get_db)):
-    db_data = EnergyData(energy_consumption=energy_consumption, unit=unit)
-    db.add(db_data)
-    db.commit()
-    return db_data
-
-@app.get("/data/", response_model=list[EnergyData])
-async def read_energy_data(db: Session = Depends(get_db)):
-    return db.query(EnergyData).all()
-```
-
-#### Implement Server-Sent Events (SSE)
-Add an endpoint in `main.py` for SSE:
-
-```python
-from fastapi.responses import StreamingResponse
-
-@app.get("/stream/")
-async def stream_energy_data(db: Session = Depends(get_db)):
-    def event_stream():
-        while True:
-            # Here we would ideally add logic to fetch only new data entries
-            data = db.query(EnergyData).order_by(EnergyData.timestamp.desc()).first()
-            yield f"data: {data.energy_consumption} {data.unit}\n\n"
-            time.sleep(1)  # Adjust the timing based on your data update frequency
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
-```
-
-#### Create HTMX and Jinja2 Frontend
-Set up the HTML template using Jinja2 in a file `templates/index.html`:
-
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Energy Dashboard</title>
-    <script src="https://unpkg.com/htmx.org"></script>
-</head>
-<body>
-    <h1>Energy Consumption</h1>
-    <div id="energy-data" hx-get="/stream/" hx-swap="outerHTML" hx-trigger="sse:open">
-        Waiting for data...
-    </div>
-</body>
-</html>
-```
-
-#### Serve the HTML Template
-Modify `main.py` to serve the template:
-
-```python
-from fastapi import FastAPI, Request
-from fastapi.templating import Jinja2Templates
-
-templates = Jinja2Templates(directory="templates")
-
-@app.get("/")
-async def read_root(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
-```
-
-#### Running the Server
-Use Uvicorn to run your FastAPI application:
-
-```bash
-uvicorn main:app --reload
-```
-
-This command starts your FastAPI app with live reloading enabled.
-
-### Final Notes
-- **Ensure your database and user credentials are set correctly** in `models.py`.
-- **The SSE connection is kept simple**; for a production scenario, consider handling reconnections and more complex streaming logic.
-- **HTMX will update the div** whenever a new SSE message is received,
-
- making the dashboard dynamic and real-time.
 
 ### References
 
