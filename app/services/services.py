@@ -1,6 +1,9 @@
-import requests
-
+import os
+import httpx
+from dotenv import load_dotenv
 from app.utils.url_builder import URLBuilder
+
+load_dotenv()
 
 class EnergyDataService:
     def __init__(self):
@@ -14,7 +17,8 @@ class EnergyDataService:
     def request(self, value):
         self._request = value
 
-    def fetch_data(self):
+
+    async def fetch_data(self):
         url = (URLBuilder()
             .add_frequency('hourly')
             .add_data('value')
@@ -26,7 +30,9 @@ class EnergyDataService:
             .add_length(5000)
             .add_start('2024-05-16T00')
             .add_end('2024-05-17T00')
+            .api_key(os.getenv("API_KEY"))
             .build())        
         
-        self.request = requests.get(url)
+        async with httpx.AsyncClient() as client:
+            self.request = await client.get(url)
         return self.request.json()

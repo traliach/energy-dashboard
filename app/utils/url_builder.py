@@ -9,6 +9,9 @@ class URLBuilder:
     SORT_DIRECTION = "&sort%5B0%5D%5Bdirection%5D="
     OFFSET = "&offset="
     LENGTH = "&length="
+    START = "&start="
+    END = "&end="
+    API_KEY = "&api_key="
 
     def __init__(self):
         self._url = self.BASE_URL
@@ -56,4 +59,6 @@ class URLBuilder:
     def build(self):
         return self._url
     
-    
+    def api_key(self, key):
+        self._url += self.API_KEY + key
+        return self
