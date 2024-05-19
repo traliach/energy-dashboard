@@ -15,6 +15,7 @@ dependencies = [
     "aiosqlite>=0.20.0",
     "pytest>=8.2.0",
     "pytest-asyncio>=0.23.7",
+    "alembic>=1.13.1",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"
@@ -32,3 +33,6 @@ allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/energy_dashboard"]
+
+[tool.hatch.build.scripts]
+energy-dashboard = "energy_dashboard.main:main"
