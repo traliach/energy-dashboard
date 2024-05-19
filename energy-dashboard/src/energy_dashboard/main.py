@@ -1,7 +1,6 @@
 import uvicorn
 from fastapi import FastAPI
-from app.routes import router
-from app.config import database
+from .routes import router
 
 def create_app():
     app = FastAPI()
@@ -12,4 +11,4 @@ def create_app():
 app = create_app()
 
 if __name__ == "__main__":
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+        uvicorn.run("src.energy_dashboard.main:app", host="0.0.0.0", port=8000, reload=True)

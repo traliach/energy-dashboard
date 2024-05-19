@@ -1,6 +1,6 @@
 import httpx
 from fastapi import APIRouter, Depends
-from app.services import EnergyDataService
+from .services import EnergyDataService
 
 router = APIRouter()
 

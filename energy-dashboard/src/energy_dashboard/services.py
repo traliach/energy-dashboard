@@ -1,7 +1,6 @@
 import os
 import httpx
-from fastapi import Depends
-from app.utils import URLBuilder
+from .utils import URLBuilder
 from dotenv import load_dotenv
 
 load_dotenv()
