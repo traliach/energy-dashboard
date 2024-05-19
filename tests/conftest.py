@@ -1,6 +1,6 @@
 import pytest
 import httpx
-from app.services import EnergyDataService
+from app.services import EnergyDataClient
 from fastapi.testclient import TestClient
 from app.main import create_app
 
@@ -15,4 +15,4 @@ def client():
 
 @pytest.fixture
 def mock_energy_service():
-    return EnergyDataService(httpx.AsyncClient())
+    return EnergyDataClient(httpx.AsyncClient())

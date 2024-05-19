@@ -1,6 +1,6 @@
 import pytest
 import httpx
-from app.services import EnergyDataService
+from app.services import EnergyDataClient
 
 @pytest.mark.asyncio
 async def test_fetch_data(monkeypatch):
@@ -28,7 +28,7 @@ async def test_fetch_data(monkeypatch):
 
     # Create an instance of the service
     async with httpx.AsyncClient() as client:
-        service = EnergyDataService(client)
+        service = EnergyDataClient(client)
 
         # Call the fetch_data method
         result = await service.fetch_data()

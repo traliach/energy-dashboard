@@ -7,6 +7,5 @@ jinja2
 httpx
 aiosqlite
 pytest
-pytest
 pytest-asyncio
 asyncio

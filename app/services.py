@@ -20,7 +20,7 @@ class EnergyDataService:
         url_builder.add_api_key(self.api_key)
         return url_builder.build()
 
-    async def fetch_data(self) -> dict:
+    async def fetch_data(self,) -> dict:
         params = {
             "frequency": "hourly",
             "data[0]": "value",
