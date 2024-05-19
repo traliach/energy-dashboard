@@ -1,6 +1,15 @@
-from sqlalchemy import Column, Integer, Float, String, DateTime, create_engine
+from sqlalchemy import Column, Integer, Float, String, DateTime, MetaData, create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from databases import Database
 
-class EnergyData():
+DATABASE_URL = "sqlite:///energy.db"
+
+database = Database(DATABASE_URL)
+metadata = MetaData()
+
+Base = declarative_base()
+
+class EnergyData(Base):
     __tablename__ = 'energy_data'
     id = Column(Integer, primary_key=True, autoincrement=True)
     period = Column(DateTime, nullable=False)
