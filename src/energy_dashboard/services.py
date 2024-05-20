@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from sqlalchemy import insert
 from .models import EnergyData, database
 
-load_dotenv()    
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -19,41 +19,41 @@ class EnergyDataService:
         self.api_key = os.getenv("API_KEY")
 
     def build_url(self, params: dict) -> str:
+        # Create an instance of URLBuilder
         url_builder = URLBuilder()
-        
+
+        # Add parameters to the URLBuilder
         for key, value in params.items():
             url_builder.add_param(key, value)
-            
+
+        # Add API key to the URLBuilder
         url_builder.add_api_key(self.api_key)
         return url_builder.build()
 
-    # A significant demand spike in the MISO footprint occurred during the week of January 29, 2019. 
-    # This period experienced extremely cold temperatures due to the polar vortex, which led to a surge in heating demand across the Midwest. 
-    # MISO reported a peak demand of around 104.8 GW on January 30, 2019, marking one of the highest winter demand levels in recent history. 
-    # This spike stressed the grid, highlighting the importance of reliable energy supply during extreme weather events​ 
-    async def fetch_data(self) -> dict:
-        params = {
-            "frequency": "hourly",
-            "data[0]": "value",
-            # "facets[respondent][]": "MISO",
-            "facets[type][]": "D",
-            "sort[0][column]": "period",
-            "sort[0][direction]": "desc",
-            "offset": 0,
-            "length": 5000,
-            "start": "2019-01-29T00",
-            "end": "2019-02-04T23",
-        }
-        url = self.build_url(params)
-        response = await self.client.get(url)
-        data = response.json()
-        logger.info(f"Logged item: {data}")
+    async def fetch_data(self, params) -> dict:
+        while True:
+            # Build the URL using the parameters
+            url = self.build_url(params)
 
-        while data['response']['data']:
+            # Send a GET request to the API
+            response = await self.client.get(url)
+
+            # Parse the response as JSON
+            data = response.json()
+
+            # Break the loop if there is no data in the response
+            if not data['response']['data']:
+                break
+
+            # Process each item in the data
             for item in data['response']['data']:
+                # Convert the value to float, or 0.0 if it is None
                 value = float(item['value']) if item['value'] is not None else 0.0
-                period = datetime.strptime(item['period'], "%Y-%m-%dT%H")  # adjusted format string
 
+                # Parse the period string into a datetime object
+                period = datetime.strptime(item['period'], "%Y-%m-%dT%H")
+
+                # Create an insert query for the EnergyData table
                 query = insert(EnergyData).values(
                     value=value,
                     period=period,
@@ -63,13 +63,11 @@ class EnergyDataService:
                     type_name=item['type-name'],
                     value_units=item['value-units']
                 )
-                await database.execute(query)       
-                # Log the item
 
+                # Execute the query
+                await database.execute(query)
+
+            # Increment the offset parameter for the next iteration
             params['offset'] += params['length']
-            url = self.build_url(params)
-            response = await self.client.get(url)
-            data = response.json()
-            logger.info(f"Logged item: {data}")
-        
+
         return data

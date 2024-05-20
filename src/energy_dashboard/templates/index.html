@@ -2,13 +2,46 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Energy Dashboard</title>
-    <script src="https://unpkg.com/htmx.org"></script>
+    <script src="https://unpkg.com/htmx.org@1.6.1"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.3/css/bulma.min.css">
+    <style>
+        .dashboard {
+            margin: 20px;
+        }
+        .box {
+            margin-bottom: 10px;
+        }
+    </style>
 </head>
 <body>
-    <h1>Energy Consumption</h1>
-    <div id="energy-data" hx-get="/stream/" hx-swap="outerHTML" hx-trigger="sse:open">
-        Waiting for data...
+    <div class="container">
+        <div class="notification is-primary">
+            <h1 class="title">Energy Dashboard</h1>
+            <p class="subtitle">Real-time Energy Data Updates</p>
+        </div>
+        <div id="dashboard" class="dashboard" hx-sse="connect:/api/v1/stream/">
+            <!-- Initial content -->
+            <div class="box">
+                <p class="has-text-centered">Waiting for data...</p>
+            </div>
+        </div>
     </div>
+
+    <script>
+        document.addEventListener('htmx:sseMessage', function(event) {
+            alert('New data received');
+            const data = JSON.parse(event.detail.data);
+            const dashboard = document.getElementById('dashboard');
+            const newEntry = document.createElement('div');
+            newEntry.className = 'box';
+            newEntry.innerHTML = `<p><strong>Period:</strong> ${data.period}</p>
+                                  <p><strong>Respondent:</strong> ${data.respondent} (${data.respondent_name})</p>
+                                  <p><strong>Type:</strong> ${data.type}</p>
+                                  <p><strong>Value:</strong> ${data.value}</p>`;
+            dashboard.prepend(newEntry);
+        });
+    </script>
 </body>
 </html>
