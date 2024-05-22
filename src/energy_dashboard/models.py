@@ -1,6 +1,7 @@
+from databases import Database
 from sqlalchemy import Column, Integer, String, Float, DateTime, MetaData, create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from databases import Database
+from sqlalchemy.orm import sessionmaker
 
 # Define the URL for the SQLite database
 DATABASE_URL = "sqlite:///energy.db"
@@ -26,8 +27,12 @@ class EnergyData(Base):
     value = Column(Float, nullable=True)
     value_units = Column(String, nullable=True)
 
+    def __repr__(self):
+        return f"<EnergyData(id={self.id}, period={self.period}, respondent={self.respondent}, respondent_name={self.respondent_name}, type={self.type}, type_name={self.type_name}, value={self.value}, value_units={self.value_units})>"
+
 # Create an engine instance using the DATABASE_URL
 engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Create the tables defined in the metadata
 Base.metadata.create_all(engine)

@@ -1,11 +1,17 @@
-from datetime import datetime
-import os
-import httpx
+import asyncio
+import json
 import logging
-from .utils import URLBuilder
+import os
+from datetime import datetime, timedelta
+from sqlalchemy.orm import Session
+
+from fastapi import Request
+import httpx
 from dotenv import load_dotenv
 from sqlalchemy import insert
+
 from .models import EnergyData, database
+from .utils import URLBuilder
 
 load_dotenv()
 
@@ -13,10 +19,12 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class EnergyDataService:
-    def __init__(self, client: httpx.AsyncClient):
+    def __init__(self, db: Session, client: httpx.AsyncClient):
         self.client = client
         self.api_key = os.getenv("API_KEY")
+        self.db = db
 
     def build_url(self, params: dict) -> str:
         # Create an instance of URLBuilder
@@ -42,32 +50,35 @@ class EnergyDataService:
             data = response.json()
 
             # Break the loop if there is no data in the response
-            if not data['response']['data']:
+            if not data["response"]["data"]:
                 break
 
             # Process each item in the data
-            for item in data['response']['data']:
+            for item in data["response"]["data"]:
                 # Convert the value to float, or 0.0 if it is None
-                value = float(item['value']) if item['value'] is not None else 0.0
+                value = float(item["value"]) if item["value"] is not None else 0.0
 
                 # Parse the period string into a datetime object
-                period = datetime.strptime(item['period'], "%Y-%m-%dT%H")
+                period = datetime.strptime(item["period"], "%Y-%m-%dT%H")
 
                 # Create an insert query for the EnergyData table
                 query = insert(EnergyData).values(
                     value=value,
                     period=period,
-                    respondent=item['respondent'],
-                    respondent_name=item['respondent-name'],
-                    type=item['type'],
-                    type_name=item['type-name'],
-                    value_units=item['value-units']
+                    respondent=item["respondent"],
+                    respondent_name=item["respondent-name"],
+                    type=item["type"],
+                    type_name=item["type-name"],
+                    value_units=item["value-units"],
                 )
 
                 # Execute the query
                 await database.execute(query)
 
             # Increment the offset parameter for the next iteration
-            params['offset'] += params['length']
+            params["offset"] += params["length"]
 
         return data
+
+    def list_all(self):
+        return self.db.query(EnergyData).order_by(EnergyData.respondent, EnergyData.period).all()
