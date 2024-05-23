@@ -3,14 +3,18 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
+from typing import AsyncGenerator
+
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from fastapi import Request
 import httpx
 from dotenv import load_dotenv
-from sqlalchemy import insert
+from sqlalchemy import insert, select, Row
 
-from .models import EnergyData, database
+from .database import EnergyDataTable, database
+from .models import EnergyData
 from .utils import URLBuilder
 
 load_dotenv()
@@ -21,9 +25,10 @@ logger = logging.getLogger(__name__)
 
 
 class EnergyDataService:
-    def __init__(self, db: Session, client: httpx.AsyncClient):
+    def __init__(self, async_db: AsyncSession, db: Session, client: httpx.AsyncClient):
         self.client = client
         self.api_key = os.getenv("API_KEY")
+        self.async_db = async_db
         self.db = db
 
     def build_url(self, params: dict) -> str:
@@ -62,7 +67,7 @@ class EnergyDataService:
                 period = datetime.strptime(item["period"], "%Y-%m-%dT%H")
 
                 # Create an insert query for the EnergyData table
-                query = insert(EnergyData).values(
+                query = insert(EnergyDataTable).values(
                     value=value,
                     period=period,
                     respondent=item["respondent"],
@@ -81,4 +86,37 @@ class EnergyDataService:
         return data
 
     def list_all(self):
-        return self.db.query(EnergyData).order_by(EnergyData.respondent, EnergyData.period).all()
+        return (
+            self.db.query(EnergyDataTable)
+            .order_by(EnergyDataTable.respondent, EnergyDataTable.period)
+            .all()
+        )
+
+    async def stream_all(self, row_count=1) -> AsyncGenerator[EnergyData, None]:
+        """
+        Stream all rows from the EnergyDataTable
+        row_count: int (number of rows to fetch at a time)
+        """
+        stmt = (
+            select(EnergyDataTable)
+            .order_by(EnergyDataTable.respondent, EnergyDataTable.period)
+            .execution_options(stream_results=True, max_row_buffer=row_count)
+        )
+        results_stream = await self.async_db.stream(stmt)
+        async for partition in results_stream.partitions(row_count):
+            for rows in partition:
+                for row in rows:
+                    row_dict = self.row_to_dict(row)
+                    data = EnergyData.parse_obj(row_dict)
+                    yield data
+
+    @staticmethod
+    def row_to_dict(row: Row):
+        """
+        Convert a SQLAlchemy Row object to a dictionary
+        row: Row (SQLAlchemy Row object)
+        """
+        m = {}
+        for column in row.__table__.columns:
+            m[column.name] = str(getattr(row, column.name))
+        return m

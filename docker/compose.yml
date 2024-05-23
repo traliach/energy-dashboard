@@ -4,7 +4,7 @@ services:
   db:
     build:
       context: .
-      dockerfile: Dockerfile-db
+      dockerfile: Dockerfile.db
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
@@ -17,7 +17,7 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile-app
+      dockerfile: Dockerfile.app
     volumes:
       - .:/code
     ports:

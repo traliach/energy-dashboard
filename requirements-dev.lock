@@ -6,7 +6,6 @@
 #   features: []
 #   all-features: false
 #   with-sources: false
-#   generate-hashes: false
 
 -e file:.
 aiosqlite==0.20.0
@@ -110,6 +109,7 @@ pyyaml==6.0.1
     # via uvicorn
 rich==13.7.1
     # via typer
+ruff==0.4.5
 shellingham==1.5.4
     # via typer
 six==1.16.0

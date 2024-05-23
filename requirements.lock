@@ -6,7 +6,6 @@
 #   features: []
 #   all-features: false
 #   with-sources: false
-#   generate-hashes: false
 
 -e file:.
 aiosqlite==0.20.0
