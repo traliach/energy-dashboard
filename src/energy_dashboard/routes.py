@@ -1,7 +1,10 @@
 import asyncio
 from datetime import datetime
+import math
 
 from databases import Database
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.responses import StreamingResponse
 import httpx
@@ -13,6 +16,8 @@ from .models import SessionLocal, EnergyData
 from bokeh.plotting import figure
 from bokeh.embed import components
 from bokeh.models import ColumnDataSource
+from bokeh.models import NumeralTickFormatter
+from bokeh.models import HoverTool
 
 app = FastAPI()
 router = APIRouter()
@@ -24,14 +29,17 @@ def get_db():
         yield db
     finally:
         db.close()
-        
+
 
 # Dependency function to get an instance of EnergyDataService
 def get_energy_service(db: Session = Depends(get_db)):
     return EnergyDataService(db, httpx.AsyncClient())
 
-@app.get("/")
-async def serve_dashboard(request: Request, service: EnergyDataService = Depends(get_energy_service)):
+
+@app.get("/", name="index")
+async def serve_dashboard(
+    request: Request, service: EnergyDataService = Depends(get_energy_service)
+):
     # Serve the dashboard using the index.html template
     data = service.list_all()
 
@@ -42,27 +50,54 @@ async def serve_dashboard(request: Request, service: EnergyDataService = Depends
             result[period_date] = []
         result[period_date].append(energy_data)
 
-    # iterate over periods and construct a bokeh ColumnDataSource for each energy data in each period. The x axis will be respondents the y axis will be values
+    # iterate over periods and construct a bokeh ColumnDataSource for each energy data in each period. 
     period, energy_data = result.popitem()
-    x = [energy.respondent for energy in energy_data]
-    y = [energy.value for energy in energy_data]
-    source = ColumnDataSource(data=dict(x=x, y=y))
-    p = figure(title=str(period), x_axis_label="Respondent", y_axis_label="Value")
-    p.vbar(x="x", top="y", width=0.9, source=source)
 
-    print(p)
-    script, div = components(p)
+    respondents = [energy.respondent for energy in energy_data]
+    hourly_values = [energy.value for energy in energy_data]
+
+    source = ColumnDataSource(data=dict(
+        respondents=respondents,
+        hourly_values=hourly_values
+    ))
+
+    # Format the date in a more readable way
+    formatted_date = period.strftime("%B %d, %Y at %I:%M %p")
+
+    # Use the formatted date in the title
+    fig = figure(x_range=respondents, height=500, width=1250, title=f"Hour: {formatted_date}")
+    
+    # styling
+    fig.title.align = 'center'
+    fig.title.text_font_size = '1em'
+    fig.yaxis[0].formatter = NumeralTickFormatter(format="0.0a")
+    fig.yaxis.axis_label = "Megawatt Hours"
+    fig.xaxis.major_label_text_font_size = '6pt'
+    fig.xaxis.major_label_orientation = math.pi / 4    
+    
+    fig.vbar(x='respondents', top='hourly_values', width=1.0, source=source)
+
+    hover = HoverTool(tooltips=[
+        ("Respondent", "@respondents"),
+        ("Value", "@hourly_values{0.00}"),
+    ])
+
+    fig.add_tools(hover)
+    script, div = components(fig)
 
     context = {
         "script": script,
         "div": div,
     }
 
-    return templates.TemplateResponse(
-        "index.html", {"request": request}, context=context
-    )
+    if request.headers.get("HX-Request"):
+        return templates.TemplateResponse(
+            "partials/bar.html", {"request": request, **context}
+        )
+    return templates.TemplateResponse("index.html", {"request": request, **context})
 
-
+    
+    
 @app.post("/api/v1/seed-data/")
 async def seed_energy_data(service: EnergyDataService = Depends(get_energy_service)):
     return await service.fetch_data(

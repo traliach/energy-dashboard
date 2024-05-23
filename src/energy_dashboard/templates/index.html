@@ -1,17 +1,10 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Energy Dashboard</title>
-    <script src="https://unpkg.com/htmx.org@1.5.0"></script>
-    <link rel="stylesheet" href="https://cdn.bokeh.org/bokeh/release/bokeh-2.3.3.min.css" type="text/css">
-    <script type="text/javascript" src="https://cdn.bokeh.org/bokeh/release/bokeh-2.3.3.min.js"></script>
-</head>
-<body>
-    <div id="chart">
-        {{ div|safe }}
-    </div>
-    <script type="text/javascript">
-        {{ script|safe }}
-    </script>
-</body>
-</html>
+{% extends 'base.html' %} 
+
+{% block content %}
+    <p class="lead">Demand by Respondent</p>
+
+        <div id="barchart">  <!-- bar chart spanning 9 columns -->
+            {% include 'partials/bar.html' %}
+        </div>
+
+{% endblock %}
