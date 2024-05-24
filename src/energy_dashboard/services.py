@@ -86,8 +86,13 @@ class EnergyDataService:
         return data
 
     def list_all(self):
+        """
+        Return all rows from the EnergyDataTable
+        Filter out the US48 respondent
+        """
         return (
             self.db.query(EnergyDataTable)
+            .filter(EnergyDataTable.respondent != "US48")
             .order_by(EnergyDataTable.respondent, EnergyDataTable.period)
             .all()
         )
@@ -107,7 +112,7 @@ class EnergyDataService:
             for rows in partition:
                 for row in rows:
                     row_dict = self.row_to_dict(row)
-                    data = EnergyData.parse_obj(row_dict)
+                    data = EnergyData.model_validate(row_dict)
                     yield data
 
     @staticmethod

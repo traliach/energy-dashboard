@@ -3,7 +3,7 @@
 {% block content %}
     <p class="lead">Demand by Respondent</p>
 
-        <div id="barchart">  <!-- bar chart spanning 9 columns -->
+        <div id="barchart" hx-ext="sse" sse-connect="/stream-chart" sse-swap="stream-chart"> 
             {% include 'partials/bar.html' %}
         </div>
 

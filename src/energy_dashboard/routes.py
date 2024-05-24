@@ -65,69 +65,79 @@ async def stream_energy_data(
 
     return StreamingResponse(streaming_data(), media_type="text/event-stream")
 
+@app.get("/stream-chart", name="stream-chart", response_class=StreamingResponse)
+async def stream_energy_data(
+    request: Request, service: EnergyDataService = Depends(get_energy_service)
+):
+    async def streaming_data():
+        # stream over the data and group by period
+        data = service.stream_all()
+
+        data_by_period = {}
+        async for energy_data in data:
+            period_date = energy_data.period
+            if period_date not in data_by_period:
+                data_by_period[period_date] = []
+            data_by_period[period_date].append(energy_data)
+
+        # iterate over periods and construct a bokeh ColumnDataSource for each energy data in each period.
+        for period, data in data_by_period.items():
+            respondents = [energy.respondent for energy in data]
+            hourly_values = [energy.value for energy in data]
+
+            source = ColumnDataSource(
+                data=dict(respondents=respondents, hourly_values=hourly_values)
+            )
+
+            # Format the date in a more readable way
+            formatted_date = period.strftime("%B %d, %Y at %I:%M %p")
+
+            # Use the formatted date in the title
+            fig = figure(
+                x_range=respondents,
+                height=500,
+                width=1250,
+                title=f"Hour: {formatted_date}",
+            )
+
+            # styling
+            fig.title.align = "center"
+            fig.title.text_font_size = "1em"
+            fig.yaxis[0].formatter = NumeralTickFormatter(format="0.0a")
+            fig.yaxis.axis_label = "Megawatt Hours"
+            fig.xaxis.major_label_text_font_size = "6pt"
+            fig.xaxis.major_label_orientation = math.pi / 4
+
+            fig.vbar(x="respondents", top="hourly_values", width=1.0, source=source)
+
+            hover = HoverTool(
+                tooltips=[
+                    ("Respondent", "@respondents"),
+                    ("Value", "@hourly_values{0.00}"),
+                ]
+            )
+
+            fig.add_tools(hover)
+            script, div = components(fig)
+
+            context = {
+                "script": script,
+                "div": div,
+            }
+
+            yield f"data: {context}\n\n"
+            await asyncio.sleep(2)
+
+    return StreamingResponse(streaming_data(), media_type="text/event-stream")
+
 
 @app.get("/", name="index")
 async def serve_dashboard(
     request: Request, service: EnergyDataService = Depends(get_energy_service)
 ):
+
     # Serve the dashboard using the index.html template
-    data = service.list_all()
-
-    result = {}
-    for energy_data in data:
-        period_date = energy_data.period
-        if period_date not in result:
-            result[period_date] = []
-        result[period_date].append(energy_data)
-
-    # iterate over periods and construct a bokeh ColumnDataSource for each energy data in each period.
-    period, energy_data = result.popitem()
-
-    respondents = [energy.respondent for energy in energy_data]
-    hourly_values = [energy.value for energy in energy_data]
-
-    source = ColumnDataSource(
-        data=dict(respondents=respondents, hourly_values=hourly_values)
-    )
-
-    # Format the date in a more readable way
-    formatted_date = period.strftime("%B %d, %Y at %I:%M %p")
-
-    # Use the formatted date in the title
-    fig = figure(
-        x_range=respondents, height=500, width=1250, title=f"Hour: {formatted_date}"
-    )
-
-    # styling
-    fig.title.align = "center"
-    fig.title.text_font_size = "1em"
-    fig.yaxis[0].formatter = NumeralTickFormatter(format="0.0a")
-    fig.yaxis.axis_label = "Megawatt Hours"
-    fig.xaxis.major_label_text_font_size = "6pt"
-    fig.xaxis.major_label_orientation = math.pi / 4
-
-    fig.vbar(x="respondents", top="hourly_values", width=1.0, source=source)
-
-    hover = HoverTool(
-        tooltips=[
-            ("Respondent", "@respondents"),
-            ("Value", "@hourly_values{0.00}"),
-        ]
-    )
-
-    fig.add_tools(hover)
-    script, div = components(fig)
-
-    context = {
-        "script": script,
-        "div": div,
-    }
-
-    if request.headers.get("HX-Request"):
-        return templates.TemplateResponse(
-            "partials/bar.html", {"request": request, **context}
-        )
-    return templates.TemplateResponse("index.html", {"request": request, **context})
+    return templates.TemplateResponse("index.html", {"request": request})
 
 
 @app.post("/api/v1/seed-data/")
@@ -145,43 +155,6 @@ async def seed_energy_data(service: EnergyDataService = Depends(get_energy_servi
             "end": "2019-02-04T23",
         }
     )
-
-
-# async def event_generator(request: Request):
-#     last_id = 0
-#     template = env.get_template("row.html")
-#     while True:
-#         query = (
-#             f"SELECT * FROM energy_data WHERE id > {last_id} ORDER BY id ASC LIMIT 1"
-#         )
-#         row = await Database.fetch_one(query)
-#         if row:
-#             last_id = row.id
-#             period = (
-#                 row.period.isoformat()
-#                 if isinstance(row.period, datetime)
-#                 else datetime.strptime(row.period, "%Y-%m-%d %H:%M:%S.%f").isoformat()
-#             )
-#             data = {
-#                 "period": period,
-#                 "respondent": row.respondent,
-#                 "respondent_name": row.respondent_name,
-#                 "type": row.type,
-#                 "value": row.value,
-#             }
-#             html_row = template.render(data=data)
-#             yield f"data: {html_row}\n\n"
-#         await asyncio.sleep(1)
-
-
-# @router.get("/api/v1/stream")
-# async def stream(request: Request):
-#     return StreamingResponse(event_generator(request), media_type="text/event-stream")
-
-
-# @router.get("/graph")
-# async def stream(request: Request):
-#     return StreamingResponse(event_generator(request), media_type="text/event-stream")
 
 
 # Include the router for API endpoints
