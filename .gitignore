@@ -12,3 +12,6 @@ wheels/
 .idea
 
 .vscode
+
+.envrc
+.idea
