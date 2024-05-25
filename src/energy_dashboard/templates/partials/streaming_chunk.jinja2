@@ -1,2 +1,2 @@
 event: {{ event }}
-data: {{ context.div|safe }} {{ context.script|safe }}
+data: <div {% for name, value in attrs.items() %} {{ name }}="{{ value }}" {% endfor %}>{{ chunk.div | safe }} {{ chunk.script | safe }} </div>

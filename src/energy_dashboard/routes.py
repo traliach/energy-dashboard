@@ -51,11 +51,11 @@ def get_energy_service(
     return EnergyDataService(async_db, db, httpx.AsyncClient())
 
 
-def render_sse_html_chunk(event, context, attrs=None):
+def render_sse_html_chunk(event, chunk, attrs=None):
     if attrs is None:
         attrs = {}
     tmpl = templates.get_template("partials/streaming_chunk.jinja2")
-    html_chunk = tmpl.render(event=event, context=context, attrs=attrs)
+    html_chunk = tmpl.render(event=event, chunk=chunk, attrs=attrs)
     return html_chunk
 
 @app.get("/stream", name="stream", response_class=StreamingResponse)
@@ -90,7 +90,7 @@ async def energy_stream(service: EnergyDataService = Depends(get_energy_service)
             chunk = render_sse_html_chunk(
                 "barchart", context, attrs={"id": "barchart", "hx-swap-oob": "true"}
             )
-            yield f"event: barchart\n{chunk}\n\n"
+            yield f'{chunk}\n\n'.encode('utf-8')
             await asyncio.sleep(2)
 
     async def create_graph_component(data, period):
@@ -121,6 +121,7 @@ async def energy_stream(service: EnergyDataService = Depends(get_energy_service)
         )
         fig.add_tools(hover)
         script, div = components(fig)
+        print(f"script: {script} \n div: {div}")
         context = {
             "script": script,
             "div": div,
