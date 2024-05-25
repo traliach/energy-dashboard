@@ -90,6 +90,7 @@ async def energy_stream(service: EnergyDataService = Depends(get_energy_service)
             chunk = render_sse_html_chunk(
                 "barchart", context, attrs={"id": "barchart", "hx-swap-oob": "true"}
             )
+            print(f"Chunk: {chunk}")
             yield f'{chunk}\n\n'.encode('utf-8')
             await asyncio.sleep(2)
 
@@ -121,10 +122,10 @@ async def energy_stream(service: EnergyDataService = Depends(get_energy_service)
         )
         fig.add_tools(hover)
         script, div = components(fig)
-        print(f"script: {script} \n div: {div}")
+        # print(f"script: {script} \n div: {div}")
         context = {
-            "script": script,
-            "div": div,
+            "script": script.replace("\n", " "),
+            "div": div.replace("\n", " "),
         }
         return context
 
