@@ -10,6 +10,7 @@ from bokeh.plotting import figure
 from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.responses import StreamingResponse
 from fastapi.templating import Jinja2Templates
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -20,6 +21,7 @@ from .utils import TEMPLATES_DIR
 app = FastAPI()
 router = APIRouter()
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
+
 
 # Dependency function to get an instance of the database
 
@@ -49,6 +51,13 @@ def get_energy_service(
     return EnergyDataService(async_db, db, httpx.AsyncClient())
 
 
+def render_sse_html_chunk(event, context, attrs=None):
+    if attrs is None:
+        attrs = {}
+    tmpl = templates.get_template("partials/streaming_chunk.jinja2")
+    html_chunk = tmpl.render(event=event, context=context, attrs=attrs)
+    return html_chunk
+
 @app.get("/stream", name="stream", response_class=StreamingResponse)
 async def stream_energy_data(
     request: Request, service: EnergyDataService = Depends(get_energy_service)
@@ -65,77 +74,64 @@ async def stream_energy_data(
 
     return StreamingResponse(streaming_data(), media_type="text/event-stream")
 
-@app.get("/stream-chart", name="stream-chart", response_class=StreamingResponse)
-async def stream_energy_data(
-    request: Request, service: EnergyDataService = Depends(get_energy_service)
-):
-    async def streaming_data():
-        # stream over the data and group by period
-        data = service.stream_all()
 
+@app.get("/stream-chart", response_class=StreamingResponse)
+async def energy_stream(service: EnergyDataService = Depends(get_energy_service)):
+    async def streaming_data():
         data_by_period = {}
-        async for energy_data in data:
+        async for energy_data in service.stream_all():
             period_date = energy_data.period
             if period_date not in data_by_period:
                 data_by_period[period_date] = []
             data_by_period[period_date].append(energy_data)
 
-        # iterate over periods and construct a bokeh ColumnDataSource for each energy data in each period.
         for period, data in data_by_period.items():
-            respondents = [energy.respondent for energy in data]
-            hourly_values = [energy.value for energy in data]
-
-            source = ColumnDataSource(
-                data=dict(respondents=respondents, hourly_values=hourly_values)
+            context = await create_graph_component(data, period)
+            chunk = render_sse_html_chunk(
+                "barchart", context, attrs={"id": "barchart", "hx-swap-oob": "true"}
             )
-
-            # Format the date in a more readable way
-            formatted_date = period.strftime("%B %d, %Y at %I:%M %p")
-
-            # Use the formatted date in the title
-            fig = figure(
-                x_range=respondents,
-                height=500,
-                width=1250,
-                title=f"Hour: {formatted_date}",
-            )
-
-            # styling
-            fig.title.align = "center"
-            fig.title.text_font_size = "1em"
-            fig.yaxis[0].formatter = NumeralTickFormatter(format="0.0a")
-            fig.yaxis.axis_label = "Megawatt Hours"
-            fig.xaxis.major_label_text_font_size = "6pt"
-            fig.xaxis.major_label_orientation = math.pi / 4
-
-            fig.vbar(x="respondents", top="hourly_values", width=1.0, source=source)
-
-            hover = HoverTool(
-                tooltips=[
-                    ("Respondent", "@respondents"),
-                    ("Value", "@hourly_values{0.00}"),
-                ]
-            )
-
-            fig.add_tools(hover)
-            script, div = components(fig)
-
-            context = {
-                "script": script,
-                "div": div,
-            }
-
-            yield f"data: {context}\n\n"
+            yield f"event: barchart\n{chunk}\n\n"
             await asyncio.sleep(2)
+
+    async def create_graph_component(data, period):
+        respondents = [energy.respondent for energy in data]
+        hourly_values = [energy.value for energy in data]
+        source = ColumnDataSource(
+            data=dict(respondents=respondents, hourly_values=hourly_values)
+        )
+        formatted_date = period.strftime("%B %d, %Y at %I:%M %p")
+        fig = figure(
+            x_range=respondents,
+            height=500,
+            width=1250,
+            title=f"Hour: {formatted_date}",
+        )
+        fig.title.align = "center"
+        fig.title.text_font_size = "1em"
+        fig.yaxis[0].formatter = NumeralTickFormatter(format="0.0a")
+        fig.yaxis.axis_label = "Megawatt Hours"
+        fig.xaxis.major_label_text_font_size = "6pt"
+        fig.xaxis.major_label_orientation = math.pi / 4
+        fig.vbar(x="respondents", top="hourly_values", width=0.9, source=source)
+        hover = HoverTool(
+            tooltips=[
+                ("Respondent", "@respondents"),
+                ("Value", "@hourly_values{0.00}"),
+            ]
+        )
+        fig.add_tools(hover)
+        script, div = components(fig)
+        context = {
+            "script": script,
+            "div": div,
+        }
+        return context
 
     return StreamingResponse(streaming_data(), media_type="text/event-stream")
 
 
 @app.get("/", name="index")
-async def serve_dashboard(
-    request: Request, service: EnergyDataService = Depends(get_energy_service)
-):
-
+async def index(request: Request):
     # Serve the dashboard using the index.html template
     return templates.TemplateResponse("index.html", {"request": request})
 
