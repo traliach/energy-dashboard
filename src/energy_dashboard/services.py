@@ -1,17 +1,13 @@
-import asyncio
-import json
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import AsyncGenerator
 
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Session
-
-from fastapi import Request
 import httpx
 from dotenv import load_dotenv
 from sqlalchemy import insert, select, Row
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from .database import EnergyDataTable, database
 from .models import EnergyData

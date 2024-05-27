@@ -1,13 +1,12 @@
 import asyncio
 import math
-from datetime import datetime
 
 import httpx
 import pandas as pd
 from bokeh.embed import components
 from bokeh.models import ColumnDataSource
 from bokeh.models import HoverTool
-from bokeh.models import NumeralTickFormatter
+from bokeh.models import NumeralTickFormatter, DatetimeTickFormatter
 from bokeh.plotting import figure
 from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.responses import StreamingResponse
@@ -47,7 +46,7 @@ def get_db():
 
 # Dependency function to get an instance of EnergyDataService
 def get_energy_service(
-    db: Session = Depends(get_db), async_db: AsyncSession = Depends(get_async_db)
+        db: Session = Depends(get_db), async_db: AsyncSession = Depends(get_async_db)
 ):
     return EnergyDataService(async_db, db, httpx.AsyncClient())
 
@@ -62,7 +61,7 @@ def render_sse_html_chunk(event, chunk, attrs=None):
 
 @app.get("/stream", name="stream", response_class=StreamingResponse)
 async def stream_energy_data(
-    request: Request, service: EnergyDataService = Depends(get_energy_service)
+        request: Request, service: EnergyDataService = Depends(get_energy_service)
 ):
     """
     Stream the energy data as Server-Sent Events (SSE)
@@ -81,77 +80,93 @@ async def stream_energy_data(
 async def energy_stream(service: EnergyDataService = Depends(get_energy_service)):
     async def streaming_data():
         ## TODO REPLACE HARD CODED DATE RANGE
-        start_date = pd.Timestamp("2019-01-29")
+        start_date = pd.Timestamp("2019-01-29 ")
         end_date = pd.Timestamp("2019-02-04 23:00:00")
-        
+
         chart_state = {
             "x_state": [],
             "y_state": [],
         }
-        
-        async for energy_data in service.stream_all():
-            for data in energy_data:
-                
-                chart_state["y_state"].extend([data.value])
-                chart_state["x_state"].extend([data.period])
 
-    
-                values = [value for value in chart_state["y_state"]]
-                hours = [period for period in chart_state["x_state"]]
-                
-                source = ColumnDataSource(data=dict(hours=hours, values=values))
+        async for energy_data in buffer_stream(service):
+            chart_state["y_state"].extend([data.value for data in energy_data])
+            chart_state["x_state"].extend([data.period for data in energy_data])
 
-                fig = figure(
-                    x_axis_type="datetime",
-                    height=500,
-                    tools="xpan",
-                    width=1250,
-                    title=f"Demand: MISO",
-                    x_range=(start_date, end_date),
-                )
-                fig.title.align = "center"
-                fig.title.text_font_size = "1em"
-                fig.yaxis[0].formatter = NumeralTickFormatter(format="0.0a")
-                fig.yaxis.axis_label = "Megawatt Hours"
-                fig.y_range.start = 0
-                fig.y_range.end = 150000
-                fig.xaxis.major_label_text_font_size = "6pt"
-                fig.xaxis.major_label_orientation = math.pi / 4
+            values = [value for value in chart_state["y_state"]]
+            hours = [period for period in chart_state["x_state"]]
+            print(f"state: {chart_state} \n\n")
+            # print(f"h: {hours} \n\n")
+            source = ColumnDataSource(data=dict(hours=hours, values=values))
 
-                fig.line(
-                    x="hours",
-                    y="values",
-                    source=source,
-                    line_width=2,
-                )
+            fig = figure(
+                x_axis_type="datetime",
+                height=500,
+                tools="xpan",
+                width=1250,
+                title=f"MISO - Hour: {max(hours)}",
+            )
+            fig.title.align = "left"
+            fig.title.text_font_size = "1em"
+            fig.yaxis[0].formatter = NumeralTickFormatter(format="0.0a")
+            fig.yaxis.axis_label = "Megawatt Hours"
+            fig.y_range.start = 50000
+            fig.y_range.end = 125000
+            # fig.xaxis.major_label_text_font_size = "6pt"
+            fig.xaxis.major_label_orientation = math.pi / 4
+            fig.xaxis.formatter = DatetimeTickFormatter(
+                days="%m/%d/%Y, %H:%M:%S",  # Format for day-level ticks
+                hours="%m/%d/%Y, %H:%M:%S",  # Format for hour-level ticks
+            )
 
-                # hover = HoverTool(
-                #     tooltips=[
-                #         ("Value", "@values{0.00}"),
-                #         ("Hours", "@hours{%F %T}"),
-                #     ],
-                #     formatters={
-                #         "@hours": "datetime",
-                #     },
-                #     mode="vline",
-                #     show_arrow=False,
-                # )
-                # fig.add_tools(hover)
+            fig.line(
+                x="hours",
+                y="values",
+                source=source,
+                line_width=2,
+            )
 
-                script, div = components(fig)
-                # print(f"script: {script} \n div: {div}")
-                context = {
-                    "script": script.replace("\n", " "),
-                    "div": div.replace("\n", " "),
-                }
-                chunk = render_sse_html_chunk(
-                    "linechart", context, attrs={"id": "linechart", "hx-swap-oob": "true"}
-                )
-                # print(f"Chunk: {chunk}")
-                yield f"{chunk}\n\n".encode("utf-8")
-                await asyncio.sleep(.5)
+            hover = HoverTool(
+                tooltips=[
+                    ("Value", "@values{0.00}"),
+                    ("Hours", "@hours{%F %T}"),
+                ],
+                formatters={
+                    "@hours": "datetime",
+                },
+                mode="vline",
+                show_arrow=False,
+            )
+            fig.add_tools(hover)
+
+            script, div = components(fig)
+            # print(f"script: {script} \n div: {div}")
+            context = {
+                "script": script.replace("\n", " "),
+                "div": div.replace("\n", " "),
+            }
+            chunk = render_sse_html_chunk(
+                "linechart",
+                context,
+                attrs={"id": "linechart", "hx-swap-oob": "true"},
+            )
+            # print(f"Chunk: {chunk}")
+
+            yield f"{chunk}\n\n".encode("utf-8")
+            await asyncio.sleep(2)
 
     return StreamingResponse(streaming_data(), media_type="text/event-stream")
+
+
+async def buffer_stream(service: EnergyDataService):
+    buffer = []
+    async for energy_data in service.stream_all():
+        for data in energy_data:
+            buffer.append(data)
+        if len(buffer) >= 10:
+            yield buffer
+            buffer = []
+    if buffer:
+        yield buffer
 
 
 @app.get("/", name="index")
