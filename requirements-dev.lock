@@ -6,8 +6,11 @@
 #   features: []
 #   all-features: false
 #   with-sources: false
+#   generate-hashes: false
 
 -e file:.
+aiocache==0.12.2
+    # via energy-dashboard
 aiosqlite==0.20.0
     # via energy-dashboard
 alembic==1.13.1
@@ -81,6 +84,7 @@ packaging==24.0
     # via pytest
 pandas==2.2.2
     # via bokeh
+    # via energy-dashboard
 pillow==10.3.0
     # via bokeh
 pluggy==1.5.0

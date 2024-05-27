@@ -97,23 +97,26 @@ class EnergyDataService:
             .all()
         )
 
-    async def stream_all(self, row_count=1) -> AsyncGenerator[EnergyData, None]:
-        """
-        Stream all rows from the EnergyDataTable
-        row_count: int (number of rows to fetch at a time)
-        """
+    async def stream_all(self, row_count=10) -> AsyncGenerator['EnergyData', None]:
         stmt = (
             select(EnergyDataTable)
+            .filter(EnergyDataTable.respondent == "MISO")
             .order_by(EnergyDataTable.respondent, EnergyDataTable.period)
             .execution_options(stream_results=True, max_row_buffer=row_count)
         )
         results_stream = await self.async_db.stream(stmt)
+        buffer = []
         async for partition in results_stream.partitions(row_count):
             for rows in partition:
                 for row in rows:
                     row_dict = self.row_to_dict(row)
                     data = EnergyData.model_validate(row_dict)
-                    yield data
+                    buffer.append(data)
+                    if len(buffer) >= row_count:
+                        yield buffer
+                        buffer = []
+        if buffer:
+            yield buffer
 
     @staticmethod
     def row_to_dict(row: Row):
