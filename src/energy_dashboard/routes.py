@@ -2,15 +2,15 @@ import asyncio
 import logging
 import math
 import typing
-from fastapi.exceptions import RequestValidationError
+
 import httpx
 import pandas as pd
 from bokeh.embed import components
 from bokeh.models import ColumnDataSource
-from bokeh.models import HoverTool
-from bokeh.models import NumeralTickFormatter, DatetimeTickFormatter
+from bokeh.models import NumeralTickFormatter, DatetimeTickFormatter, HoverTool, Range1d
 from bokeh.plotting import figure
 from fastapi import APIRouter, Depends, FastAPI, Request, Query, Form
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +19,10 @@ from sqlalchemy.orm import Session
 from .database import AsyncSessionLocal, SessionLocal
 from .services import EnergyDataService
 from .utils import TEMPLATES_DIR
+
+CHART_TOPIC = "chart"
+
+BUFFER_SIZE = 10
 
 app = FastAPI()
 router = APIRouter()
@@ -82,7 +86,7 @@ async def trigger_streaming(request: Request,
     sse_config = dict(
         listener="hx-sse-listener",
         path=f'/stream-chart?param={param}',
-        topics=["linechart"],
+        topics=[CHART_TOPIC],
     )
     return templates.TemplateResponse("index.jinja2", {"request": request, "sse_config": sse_config})
 
@@ -94,26 +98,21 @@ async def energy_stream(
 ):
     print(f"Params: {param}")
 
-    async def streaming_data():
-        ## TODO REPLACE HARD CODED DATE RANGE
-        start_date = pd.Timestamp("2019-01-29 ")
-        end_date = pd.Timestamp("2019-02-04 23:00:00")
+    chart_state = {
+        "x_state": [],
+        "y_state": [],
+    }
 
-        chart_state = {
-            "x_state": [],
-            "y_state": [],
-        }
+    async def streaming_data(chart_state=chart_state):
 
         async for energy_data in buffer_stream(service):
             chart_state["y_state"].extend([data.value for data in energy_data])
             chart_state["x_state"].extend([data.period for data in energy_data])
-
             values = [value for value in chart_state["y_state"]]
             hours = [period for period in chart_state["x_state"]]
             print(f"state: {chart_state} \n\n")
             # print(f"h: {hours} \n\n")
             source = ColumnDataSource(data=dict(hours=hours, values=values))
-
             fig = figure(
                 x_axis_type="datetime",
                 height=500,
@@ -129,18 +128,21 @@ async def energy_stream(
             fig.y_range.end = 125000
             # fig.xaxis.major_label_text_font_size = "6pt"
             fig.xaxis.major_label_orientation = math.pi / 4
+            ## TODO REPLACE HARD CODED DATE RANGE
+            start_date = pd.Timestamp("2019-01-29 ")
+            end_date = pd.Timestamp("2019-02-04 23:00:00")
+            fig.x_range = Range1d(start=start_date, end=end_date)
+            fig.xaxis.ticker.desired_num_ticks = 24
             fig.xaxis.formatter = DatetimeTickFormatter(
                 days="%m/%d/%Y, %H:%M:%S",  # Format for day-level ticks
                 hours="%m/%d/%Y, %H:%M:%S",  # Format for hour-level ticks
             )
-
             fig.line(
                 x="hours",
                 y="values",
                 source=source,
                 line_width=2,
             )
-
             hover = HoverTool(
                 tooltips=[
                     ("Value", "@values{0.00}"),
@@ -153,24 +155,29 @@ async def energy_stream(
                 show_arrow=False,
             )
             fig.add_tools(hover)
-
             script, div = components(fig)
             # print(f"script: {script} \n div: {div}")
             context = {
                 "script": script.replace("\n", " "),
                 "div": div.replace("\n", " "),
             }
+            print(f"Energy data: {context}")
+            event_name = "Terminate" if energy_data is None or len(energy_data) < BUFFER_SIZE \
+                else CHART_TOPIC
+
             chunk = render_sse_html_chunk(
-                "linechart",
+                event_name,
                 context,
                 attrs={"id": "linechart", "hx-swap-oob": "true"},
             )
-            # print(f"Chunk: {chunk}")
 
             yield f"{chunk}\n\n".encode("utf-8")
             await asyncio.sleep(2)
 
-    return StreamingResponse(streaming_data(), media_type="text/event-stream")
+            if event_name == "Terminate":
+                break
+
+    return StreamingResponse(streaming_data(chart_state), media_type="text/event-stream")
 
 
 async def buffer_stream(service: EnergyDataService):
