@@ -1,0 +1,27 @@
+{% extends 'layout.jinja2' %}
+{% from "partials/sse.jinja2" import sse_stream %}
+
+{% block body %}
+<div class="container mt-4">
+    <p class="lead">Demand by Respondent</p>
+
+    {#   Visualization Container     #}
+    {% if sse_config %}
+        {{ sse_stream(sse_config) }}
+    {% endif %}
+
+    <div id="linechart"></div>
+
+
+    <form action="/trigger-streaming" method="POST">
+        <div class="form-group">
+            <label for="param">Parameter :</label>
+            <input type="text" id="param" name="param" class="form-control" placeholder="Enter Parameter 1" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Start Streaming</button>
+    </form>
+
+
+</div>
+
+{% endblock %}

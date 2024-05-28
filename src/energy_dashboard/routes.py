@@ -1,6 +1,8 @@
 import asyncio
+import logging
 import math
-
+import typing
+from fastapi.exceptions import RequestValidationError
 import httpx
 import pandas as pd
 from bokeh.embed import components
@@ -8,8 +10,8 @@ from bokeh.models import ColumnDataSource
 from bokeh.models import HoverTool
 from bokeh.models import NumeralTickFormatter, DatetimeTickFormatter
 from bokeh.plotting import figure
-from fastapi import APIRouter, Depends, FastAPI, Request
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, FastAPI, Request, Query, Form
+from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
@@ -24,8 +26,6 @@ templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 
 # Dependency function to get an instance of the database
-
-
 ## Async db: https://fastapi.tiangolo.com/tutorial/dependencies/
 async def get_async_db():
     async_db = AsyncSessionLocal()
@@ -76,8 +76,24 @@ async def stream_energy_data(
     return StreamingResponse(streaming_data(), media_type="text/event-stream")
 
 
+@app.post("/trigger-streaming", response_class=HTMLResponse)
+async def trigger_streaming(request: Request,
+                            param: typing.Annotated[str, Form()]):
+    sse_config = dict(
+        listener="hx-sse-listener",
+        path=f'/stream-chart?param={param}',
+        topics=["linechart"],
+    )
+    return templates.TemplateResponse("index.jinja2", {"request": request, "sse_config": sse_config})
+
+
 @app.get("/stream-chart", response_class=StreamingResponse)
-async def energy_stream(service: EnergyDataService = Depends(get_energy_service)):
+async def energy_stream(
+        service: EnergyDataService = Depends(get_energy_service),
+        param: str = Query(...),
+):
+    print(f"Params: {param}")
+
     async def streaming_data():
         ## TODO REPLACE HARD CODED DATE RANGE
         start_date = pd.Timestamp("2019-01-29 ")
@@ -171,8 +187,8 @@ async def buffer_stream(service: EnergyDataService):
 
 @app.get("/", name="index")
 async def index(request: Request):
-    # Serve the dashboard using the index.html template
-    return templates.TemplateResponse("index.html", {"request": request})
+    # Serve the dashboard using the index.jinja2 template
+    return templates.TemplateResponse("index.jinja2", {"request": request})
 
 
 @app.post("/api/v1/seed-data/")
@@ -189,6 +205,15 @@ async def seed_energy_data(service: EnergyDataService = Depends(get_energy_servi
             "start": "2019-01-29T00",
             "end": "2019-02-04T23",
         }
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logging.error(f"Validation error: {exc} in request: {request}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "body": exc.body},
     )
 
 
