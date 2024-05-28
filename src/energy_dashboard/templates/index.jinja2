@@ -2,29 +2,41 @@
 {% from "partials/sse.jinja2" import sse_stream %}
 
 {% block body %}
-<div class="container mt-4">
-    <p class="lead">Demand by Respondent</p>
+    <div class="container mt-4">
+        <p class="lead">Demand by Respondent</p>
 
-    {#   Visualization Container     #}
-    {% if sse_config %}
-        {{ sse_stream(sse_config) }}
-    {% endif %}
+        {#   Visualization Container     #}
+        {% if sse_config %}
+            {{ sse_stream(sse_config) }}
+        {% endif %}
 
 
-    <form action="/trigger-streaming" method="POST">
-        <div class="form-group">
-            <label for="param">Parameter :</label>
-            <input type="text" id="param" name="param" class="form-control" placeholder="Enter Parameter 1" required>
+        <form action="/trigger-streaming" method="POST">
+            <div class="form-group">
+                <label for="param">Parameter :</label>
+                <input type="text" id="param" name="param" class="form-control" placeholder="Enter Parameter 1"
+                       required>
+            </div>
+            <button type="submit" class="btn btn-primary">Start Streaming</button>
+        </form>
+
+
+        <div class="containter" style="margin-top: 30px;">
+            <div id="linechart"></div>
         </div>
-        <button type="submit" class="btn btn-primary">Start Streaming</button>
-    </form>
 
+        <script>
+            document.addEventListener("htmx:sseMessage", function (event) {
+                const topic = event.detail.type;
+                console.log(topic);
+                if (topic === 'Terminate') {
+                    console.log('Terminating the connection');
+                    var element = document.getElementById('hx-sse-listener');
+                    element.remove();
+                }
+            });
+        </script>
 
-
-    <div class="containter" style="margin-top: 30px;">
-        <div id="linechart"></div>
     </div>
-
-</div>
 
 {% endblock %}

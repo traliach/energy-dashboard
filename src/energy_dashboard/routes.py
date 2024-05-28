@@ -108,75 +108,84 @@ async def energy_stream(
         async for energy_data in buffer_stream(service):
             chart_state["y_state"].extend([data.value for data in energy_data])
             chart_state["x_state"].extend([data.period for data in energy_data])
-            values = [value for value in chart_state["y_state"]]
-            hours = [period for period in chart_state["x_state"]]
-            print(f"state: {chart_state} \n\n")
-            # print(f"h: {hours} \n\n")
-            source = ColumnDataSource(data=dict(hours=hours, values=values))
-            fig = figure(
-                x_axis_type="datetime",
-                height=500,
-                tools="xpan",
-                width=1250,
-                title=f"MISO - Hour: {max(hours)}",
-            )
-            fig.title.align = "left"
-            fig.title.text_font_size = "1em"
-            fig.yaxis[0].formatter = NumeralTickFormatter(format="0.0a")
-            fig.yaxis.axis_label = "Megawatt Hours"
-            fig.y_range.start = 50000
-            fig.y_range.end = 125000
-            # fig.xaxis.major_label_text_font_size = "6pt"
-            fig.xaxis.major_label_orientation = math.pi / 4
-            ## TODO REPLACE HARD CODED DATE RANGE
-            start_date = pd.Timestamp("2019-01-29 ")
-            end_date = pd.Timestamp("2019-02-04 23:00:00")
-            fig.x_range = Range1d(start=start_date, end=end_date)
-            fig.xaxis.ticker.desired_num_ticks = 24
-            fig.xaxis.formatter = DatetimeTickFormatter(
-                days="%m/%d/%Y, %H:%M:%S",  # Format for day-level ticks
-                hours="%m/%d/%Y, %H:%M:%S",  # Format for hour-level ticks
-            )
-            fig.line(
-                x="hours",
-                y="values",
-                source=source,
-                line_width=2,
-            )
-            hover = HoverTool(
-                tooltips=[
-                    ("Value", "@values{0.00}"),
-                    ("Hours", "@hours{%F %T}"),
-                ],
-                formatters={
-                    "@hours": "datetime",
-                },
-                mode="vline",
-                show_arrow=False,
-            )
-            fig.add_tools(hover)
-            script, div = components(fig)
+
+            div, script = await create_chart(chart_state)
             # print(f"script: {script} \n div: {div}")
             context = {
                 "script": script.replace("\n", " "),
                 "div": div.replace("\n", " "),
             }
+
             print(f"Energy data: {context}")
-            event_name = "Terminate" if energy_data is None or len(energy_data) < BUFFER_SIZE \
-                else CHART_TOPIC
-
-            chunk = render_sse_html_chunk(
-                event_name,
-                context,
-                attrs={"id": "linechart", "hx-swap-oob": "true"},
-            )
-
-            yield f"{chunk}\n\n".encode("utf-8")
-
-            if event_name == "Terminate":
+            if energy_data is None or len(energy_data) < BUFFER_SIZE:
+                chunk = render_sse_html_chunk(
+                    "Terminate",
+                    "",
+                    attrs={"id": "linechart", "hx-swap-oob": "true"},
+                )
+                yield f"{chunk}\n\n".encode("utf-8")
                 break
+            else:
+                chunk = render_sse_html_chunk(
+                    CHART_TOPIC,
+                    context,
+                    attrs={"id": "linechart", "hx-swap-oob": "true"},
+                )
 
-            await asyncio.sleep(2)
+                yield f"{chunk}\n\n".encode("utf-8")
+
+                await asyncio.sleep(2)
+
+    async def create_chart(chart_state):
+        values = [value for value in chart_state["y_state"]]
+        hours = [period for period in chart_state["x_state"]]
+        print(f"state: {chart_state} \n\n")
+        # print(f"h: {hours} \n\n")
+        source = ColumnDataSource(data=dict(hours=hours, values=values))
+        fig = figure(
+            x_axis_type="datetime",
+            height=500,
+            tools="xpan",
+            width=1250,
+            title=f"MISO - Hour: {max(hours)}",
+        )
+        fig.title.align = "left"
+        fig.title.text_font_size = "1em"
+        fig.yaxis[0].formatter = NumeralTickFormatter(format="0.0a")
+        fig.yaxis.axis_label = "Megawatt Hours"
+        fig.y_range.start = 50000
+        fig.y_range.end = 125000
+        # fig.xaxis.major_label_text_font_size = "6pt"
+        fig.xaxis.major_label_orientation = math.pi / 4
+        ## TODO REPLACE HARD CODED DATE RANGE
+        start_date = pd.Timestamp("2019-01-29 ")
+        end_date = pd.Timestamp("2019-02-04 23:00:00")
+        fig.x_range = Range1d(start=start_date, end=end_date)
+        fig.xaxis.ticker.desired_num_ticks = 24
+        fig.xaxis.formatter = DatetimeTickFormatter(
+            days="%m/%d/%Y, %H:%M:%S",  # Format for day-level ticks
+            hours="%m/%d/%Y, %H:%M:%S",  # Format for hour-level ticks
+        )
+        fig.line(
+            x="hours",
+            y="values",
+            source=source,
+            line_width=2,
+        )
+        hover = HoverTool(
+            tooltips=[
+                ("Value", "@values{0.00}"),
+                ("Hours", "@hours{%F %T}"),
+            ],
+            formatters={
+                "@hours": "datetime",
+            },
+            mode="vline",
+            show_arrow=False,
+        )
+        fig.add_tools(hover)
+        script, div = components(fig)
+        return div, script
 
     return StreamingResponse(streaming_data(), media_type="text/event-stream")
 
