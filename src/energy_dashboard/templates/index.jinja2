@@ -10,17 +10,20 @@
         {{ sse_stream(sse_config) }}
     {% endif %}
 
-    <div id="linechart"></div>
-
 
     <form action="/trigger-streaming" method="POST">
         <div class="form-group">
             <label for="param">Parameter :</label>
-            <input type="text" id="param" name="param" class="form-control" placeholder="Enter Parameter" required>
+            <input type="text" id="param" name="param" class="form-control" placeholder="Enter Parameter 1" required>
         </div>
         <button type="submit" class="btn btn-primary">Start Streaming</button>
     </form>
 
+
+
+    <div class="containter" style="margin-top: 30px;">
+        <div id="linechart"></div>
+    </div>
 
 </div>
 

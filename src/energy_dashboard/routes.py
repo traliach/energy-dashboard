@@ -98,12 +98,12 @@ async def energy_stream(
 ):
     print(f"Params: {param}")
 
-    chart_state = {
-        "x_state": [],
-        "y_state": [],
-    }
+    async def streaming_data():
 
-    async def streaming_data(chart_state=chart_state):
+        chart_state = {
+            "x_state": [],
+            "y_state": [],
+        }
 
         async for energy_data in buffer_stream(service):
             chart_state["y_state"].extend([data.value for data in energy_data])
@@ -172,12 +172,13 @@ async def energy_stream(
             )
 
             yield f"{chunk}\n\n".encode("utf-8")
-            await asyncio.sleep(2)
 
             if event_name == "Terminate":
                 break
 
-    return StreamingResponse(streaming_data(chart_state), media_type="text/event-stream")
+            await asyncio.sleep(2)
+
+    return StreamingResponse(streaming_data(), media_type="text/event-stream")
 
 
 async def buffer_stream(service: EnergyDataService):
