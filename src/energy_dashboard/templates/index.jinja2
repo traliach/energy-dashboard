@@ -3,28 +3,49 @@
 
 {% block body %}
     <div class="container mt-4">
-        <p class="lead">Demand by Respondent</p>
+        <h1 class="h3">Dashboard</h1>
 
         {#   Visualization Container     #}
         {% if sse_config %}
             {{ sse_stream(sse_config) }}
         {% endif %}
 
-
-        <form action="/trigger-streaming" method="POST">
-            <div class="form-group">
-                <label for="param">Parameter :</label>
-                <input type="text" id="param" name="param" class="form-control" placeholder="Enter Parameter 1"
-                       required>
+        <form action="/trigger-streaming" method="POST" class="mt-4">
+            <div class="row">
+                <div class="col">
+                    <label for="respondent" class="form-label">Respondent</label>
+                    <input type="text" id="respondent" name="param" class="form-control" required/>
+                        <!-- Options for respondent -->
+{#                    </select>#}
+{#                    <label for="respondent" class="form-label">Respondent</label>#}
+{#                    <select id="respondent" name="respondent" class="form-select" required>#}
+{#                        <!-- Options for respondent -->#}
+{#                    </select>#}
+                </div>
+                <div class="col">
+                    <label for="type" class="form-label">Type</label>
+                    <select id="type" name="type" class="form-select">
+                        <option value="Demand" selected>Demand</option>
+                        <!-- Other options for type -->
+                    </select>
+                </div>
+                <div class="col">
+                    <label for="start-date" class="form-label">Start Date</label>
+                    <input type="date" id="start-date" name="start-date" class="form-control">
+                </div>
+                <div class="col">
+                    <label for="end-date" class="form-label">End Date</label>
+                    <input type="date" id="end-date" name="end-date" class="form-control">
+                </div>
+                <div class="col d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary">Start Streaming</button>
+                </div>
             </div>
-            <button type="submit" class="btn btn-primary">Start Streaming</button>
         </form>
 
-
-        <div class="container" style="margin-top: 30px;">
+        <div class="container mt-5" style="margin-left: -25px">
             <div id="linechart"></div>
         </div>
 
     </div>
-
 {% endblock %}

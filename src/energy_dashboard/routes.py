@@ -10,6 +10,7 @@ from bokeh.models import ColumnDataSource
 from bokeh.models import NumeralTickFormatter, DatetimeTickFormatter, HoverTool, Range1d
 from bokeh.plotting import figure
 from fastapi import APIRouter, Depends, FastAPI, Request, Query, Form
+from fastapi import Body
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -17,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from energy_dashboard.database import AsyncSessionLocal, SessionLocal
+from energy_dashboard.models import EnergyDataRequest
 from energy_dashboard.services import EnergyDataService
 from energy_dashboard.utils import TEMPLATES_DIR
 
@@ -132,7 +134,6 @@ async def energy_stream(
             chart_state = await update_chart_state(energy_data, chart_state)
             div, script = await create_chart(chart_state)
             context = await create_context(div, script)
-            print(f"Energy data: {context}")
             if await handle_termination_condition(energy_data):
                 yield render_chunk("Terminate", "", attrs={"id": "hx-sse-listener", "hx-swap-oob": "true"})
                 break
@@ -225,20 +226,9 @@ async def index(request: Request):
 
 
 @app.post("/api/v1/seed-data/")
-async def seed_energy_data(service: EnergyDataService = Depends(get_energy_service)):
-    return await service.fetch_data(
-        params={
-            "frequency": "hourly",
-            "data[0]": "value",
-            "facets[type][]": "D",
-            "sort[0][column]": "period",
-            "sort[0][direction]": "desc",
-            "offset": 0,
-            "length": 5000,
-            "start": "2019-01-29T00",
-            "end": "2019-02-04T23",
-        }
-    )
+async def seed_energy_data(request_body: EnergyDataRequest = Body(...),
+                           service: EnergyDataService = Depends(get_energy_service)):
+    return await service.fetch_data(params=request_body.params)
 
 
 @app.exception_handler(RequestValidationError)

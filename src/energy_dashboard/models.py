@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Dict, Any
 
 from pydantic import BaseModel, Field
 
@@ -14,3 +15,7 @@ class EnergyData(BaseModel):
     value_units: str = Field(
         ..., description="The units of the value of the data entry"
     )
+
+
+class EnergyDataRequest(BaseModel):
+    params: Dict[str, Any]
