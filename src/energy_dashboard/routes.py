@@ -16,9 +16,9 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
-from .database import AsyncSessionLocal, SessionLocal
-from .services import EnergyDataService
-from .utils import TEMPLATES_DIR
+from energy_dashboard.database import AsyncSessionLocal, SessionLocal
+from energy_dashboard.services import EnergyDataService
+from energy_dashboard.utils import TEMPLATES_DIR
 
 CHART_TOPIC = "chart"
 
@@ -86,7 +86,7 @@ async def trigger_streaming(request: Request,
     sse_config = dict(
         listener="hx-sse-listener",
         path=f'/stream-chart?param={param}',
-        topics=[CHART_TOPIC],
+        topics=[CHART_TOPIC, "Terminate"],
     )
     return templates.TemplateResponse("index.jinja2", {"request": request, "sse_config": sse_config})
 
@@ -98,50 +98,55 @@ async def energy_stream(
 ):
     print(f"Params: {param}")
 
-    async def streaming_data():
+    async def update_chart_state(energy_data, chart_state):
+        chart_state["y_state"].extend([data.value for data in energy_data])
+        chart_state["x_state"].extend([data.period for data in energy_data])
+        return chart_state
 
+    async def create_context(div, script):
+        context = {
+            "script": script.replace("\n", " "),
+            "div": div.replace("\n", " "),
+        }
+        return context
+
+    def render_chunk(event, context, attrs):
+        chunk = render_sse_html_chunk(
+            event,
+            context,
+            attrs=attrs,
+        )
+        return f"{chunk}\n\n".encode("utf-8")
+
+    async def handle_termination_condition(energy_data):
+        if energy_data is None or len(energy_data) < BUFFER_SIZE:
+            return True
+        return False
+
+    async def streaming_data():
         chart_state = {
             "x_state": [],
             "y_state": [],
         }
-
         async for energy_data in buffer_stream(service):
-            chart_state["y_state"].extend([data.value for data in energy_data])
-            chart_state["x_state"].extend([data.period for data in energy_data])
-
+            chart_state = await update_chart_state(energy_data, chart_state)
             div, script = await create_chart(chart_state)
-            # print(f"script: {script} \n div: {div}")
-            context = {
-                "script": script.replace("\n", " "),
-                "div": div.replace("\n", " "),
-            }
-
+            context = await create_context(div, script)
             print(f"Energy data: {context}")
-            if energy_data is None or len(energy_data) < BUFFER_SIZE:
-                chunk = render_sse_html_chunk(
-                    "Terminate",
-                    "",
-                    attrs={"id": "linechart", "hx-swap-oob": "true"},
-                )
-                yield f"{chunk}\n\n".encode("utf-8")
+            if await handle_termination_condition(energy_data):
+                yield render_chunk("Terminate", "", attrs={"id": "hx-sse-listener", "hx-swap-oob": "true"})
                 break
             else:
-                chunk = render_sse_html_chunk(
-                    CHART_TOPIC,
-                    context,
-                    attrs={"id": "linechart", "hx-swap-oob": "true"},
-                )
-
-                yield f"{chunk}\n\n".encode("utf-8")
-
+                yield render_chunk(CHART_TOPIC, context, attrs={"id": "linechart", "hx-swap-oob": "true"})
                 await asyncio.sleep(2)
 
-    async def create_chart(chart_state):
+    def prepare_data(chart_state):
         values = [value for value in chart_state["y_state"]]
         hours = [period for period in chart_state["x_state"]]
-        print(f"state: {chart_state} \n\n")
-        # print(f"h: {hours} \n\n")
         source = ColumnDataSource(data=dict(hours=hours, values=values))
+        return source
+
+    def create_figure(hours):
         fig = figure(
             x_axis_type="datetime",
             height=500,
@@ -149,15 +154,16 @@ async def energy_stream(
             width=1250,
             title=f"MISO - Hour: {max(hours)}",
         )
+        return fig
+
+    def format_figure(fig):
         fig.title.align = "left"
         fig.title.text_font_size = "1em"
         fig.yaxis[0].formatter = NumeralTickFormatter(format="0.0a")
         fig.yaxis.axis_label = "Megawatt Hours"
         fig.y_range.start = 50000
         fig.y_range.end = 125000
-        # fig.xaxis.major_label_text_font_size = "6pt"
         fig.xaxis.major_label_orientation = math.pi / 4
-        ## TODO REPLACE HARD CODED DATE RANGE
         start_date = pd.Timestamp("2019-01-29 ")
         end_date = pd.Timestamp("2019-02-04 23:00:00")
         fig.x_range = Range1d(start=start_date, end=end_date)
@@ -166,6 +172,9 @@ async def energy_stream(
             days="%m/%d/%Y, %H:%M:%S",  # Format for day-level ticks
             hours="%m/%d/%Y, %H:%M:%S",  # Format for hour-level ticks
         )
+        return fig
+
+    def add_line_and_hover(fig, source):
         fig.line(
             x="hours",
             y="values",
@@ -184,6 +193,13 @@ async def energy_stream(
             show_arrow=False,
         )
         fig.add_tools(hover)
+        return fig
+
+    async def create_chart(chart_state):
+        source = prepare_data(chart_state)
+        fig = create_figure(chart_state["x_state"])
+        fig = format_figure(fig)
+        fig = add_line_and_hover(fig, source)
         script, div = components(fig)
         return div, script
 

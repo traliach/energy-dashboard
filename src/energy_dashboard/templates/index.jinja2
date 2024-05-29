@@ -25,18 +25,6 @@
             <div id="linechart"></div>
         </div>
 
-        <script>
-            document.addEventListener("htmx:sseMessage", function (event) {
-                const topic = event.detail.type;
-                console.log(topic);
-                if (topic === 'Terminate') {
-                    console.log('Terminating the connection');
-                    var element = document.getElementById('hx-sse-listener');
-                    element.remove();
-                }
-            });
-        </script>
-
     </div>
 
 {% endblock %}
