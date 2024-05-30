@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import math
-import typing
+from typing import Annotated
 
 import httpx
 import pandas as pd
@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from energy_dashboard.database import AsyncSessionLocal, SessionLocal
-from energy_dashboard.models import EnergyDataRequest
+from energy_dashboard.models import EnergyDataRequest, StreamChartDataRequest
 from energy_dashboard.services import EnergyDataService
 from energy_dashboard.utils import TEMPLATES_DIR
 
@@ -84,10 +84,13 @@ async def stream_energy_data(
 
 @app.post("/trigger-streaming", response_class=HTMLResponse)
 async def trigger_streaming(request: Request,
-                            param: typing.Annotated[str, Form()]):
+                            respondent: Annotated[str, Form()],
+                            category: Annotated[str, Form()],
+                            start_date: Annotated[str, Form()],
+                            end_date: Annotated[str, Form()]):
     sse_config = dict(
         listener="hx-sse-listener",
-        path=f'/stream-chart?param={param}',
+        path=f'/stream-chart?respondent={respondent}&category={category}&start_date={start_date}&end_date={end_date}',
         topics=[CHART_TOPIC, "Terminate"],
     )
     return templates.TemplateResponse("index.jinja2", {"request": request, "sse_config": sse_config})
@@ -96,9 +99,23 @@ async def trigger_streaming(request: Request,
 @app.get("/stream-chart", response_class=StreamingResponse)
 async def energy_stream(
         service: EnergyDataService = Depends(get_energy_service),
-        param: str = Query(...),
+        respondent: str = Query(None),
+        category: str = Query(None),
+        start_date: str = Query(None),
+        end_date: str = Query(None),
 ):
-    print(f"Params: {param}")
+    if not all([respondent, category, start_date, end_date]):
+        return JSONResponse(
+            status_code=400,
+            content={"message": "All parameters must be provided"},
+        )
+
+    params = StreamChartDataRequest(
+        respondent=respondent,
+        category=category,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
     async def update_chart_state(energy_data, chart_state):
         chart_state["y_state"].extend([data.value for data in energy_data])
@@ -125,12 +142,14 @@ async def energy_stream(
             return True
         return False
 
-    async def streaming_data():
+    async def streaming_data(chart_params=params):
         chart_state = {
             "x_state": [],
             "y_state": [],
         }
-        async for energy_data in buffer_stream(service):
+
+        async for energy_data in buffer_stream(service, chart_params):
+            print(f"Received {len(energy_data)} records")
             chart_state = await update_chart_state(energy_data, chart_state)
             div, script = await create_chart(chart_state)
             context = await create_context(div, script)
@@ -165,9 +184,13 @@ async def energy_stream(
         fig.y_range.start = 50000
         fig.y_range.end = 125000
         fig.xaxis.major_label_orientation = math.pi / 4
-        start_date = pd.Timestamp("2019-01-29 ")
-        end_date = pd.Timestamp("2019-02-04 23:00:00")
-        fig.x_range = Range1d(start=start_date, end=end_date)
+
+        # Convert start_date and end_date from string to datetime
+        fig.x_range = Range1d(
+            start=pd.Timestamp(params.start_date),
+            end=pd.Timestamp(params.end_date)
+        )
+
         fig.xaxis.ticker.desired_num_ticks = 24
         fig.xaxis.formatter = DatetimeTickFormatter(
             days="%m/%d/%Y, %H:%M:%S",  # Format for day-level ticks
@@ -207,12 +230,12 @@ async def energy_stream(
     return StreamingResponse(streaming_data(), media_type="text/event-stream")
 
 
-async def buffer_stream(service: EnergyDataService):
+async def buffer_stream(service: EnergyDataService, chart_params: StreamChartDataRequest, row_count=BUFFER_SIZE):
     buffer = []
-    async for energy_data in service.stream_all():
+    async for energy_data in service.stream_all(row_count, chart_params):
         for data in energy_data:
             buffer.append(data)
-        if len(buffer) >= 10:
+        if len(buffer) >= BUFFER_SIZE:
             yield buffer
             buffer = []
     if buffer:

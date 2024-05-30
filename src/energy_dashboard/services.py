@@ -5,7 +5,7 @@ from typing import AsyncGenerator
 
 import httpx
 from dotenv import load_dotenv
-from sqlalchemy import insert, select, Row
+from sqlalchemy import insert, select, Row, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -93,13 +93,8 @@ class EnergyDataService:
             .all()
         )
 
-    async def stream_all(self, row_count=10) -> AsyncGenerator['EnergyData', None]:
-        stmt = (
-            select(EnergyDataTable)
-            .filter(EnergyDataTable.respondent == "MISO")
-            .order_by(EnergyDataTable.respondent, EnergyDataTable.period)
-            .execution_options(stream_results=True, max_row_buffer=row_count)
-        )
+    async def stream_all(self, row_count=10, chart_params=None) -> AsyncGenerator['EnergyData', None]:
+        stmt = await self.prepare_stmt(chart_params, row_count)
         results_stream = await self.async_db.stream(stmt)
         buffer = []
         async for partition in results_stream.partitions(row_count):
@@ -113,6 +108,42 @@ class EnergyDataService:
                         buffer = []
         if buffer:
             yield buffer
+
+    @staticmethod
+    async def prepare_stmt(params, row_count):
+        if params:
+            # Convert start_date and end_date from string to datetime
+            try:
+                start_date = datetime.strptime(params.start_date, "%Y-%m-%d %H:%M:%S.%f")
+                end_date = datetime.strptime(params.end_date, "%Y-%m-%d %H:%M:%S.%f")
+            except ValueError:
+                start_date = datetime.strptime(params.start_date, "%Y-%m-%d")
+                end_date = datetime.strptime(params.end_date, "%Y-%m-%d")
+
+            # Convert EnergyType enum to string
+            category = params.category.value
+
+            stmt = (
+                select(EnergyDataTable)
+                .where(
+                    and_(
+                        EnergyDataTable.respondent == params.respondent,
+                        EnergyDataTable.period >= start_date,
+                        EnergyDataTable.period <= end_date,
+                        EnergyDataTable.type_name == category,
+                    )
+                )
+                .order_by(EnergyDataTable.respondent, EnergyDataTable.period)
+                .execution_options(stream_results=True, max_row_buffer=row_count)
+            )
+        else:
+            stmt = (
+                select(EnergyDataTable)
+                .filter(EnergyDataTable.respondent != "US48")
+                .order_by(EnergyDataTable.respondent, EnergyDataTable.period)
+                .execution_options(stream_results=True, max_row_buffer=row_count)
+            )
+        return stmt
 
     @staticmethod
     def row_to_dict(row: Row):
