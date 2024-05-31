@@ -21,6 +21,7 @@ metadata = MetaData()
 # Create a declarative base class
 Base = declarative_base(metadata=metadata)
 
+
 # Define the EnergyData table
 class EnergyDataTable(Base):
     __tablename__ = "energy_data"

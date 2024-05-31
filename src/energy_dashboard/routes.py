@@ -52,7 +52,7 @@ def get_db():
 
 # Dependency function to get an instance of EnergyDataService
 def get_energy_service(
-        db: Session = Depends(get_db), async_db: AsyncSession = Depends(get_async_db)
+    db: Session = Depends(get_db), async_db: AsyncSession = Depends(get_async_db)
 ):
     return EnergyDataService(async_db, db, httpx.AsyncClient())
 
@@ -67,7 +67,7 @@ def render_sse_html_chunk(event, chunk, attrs=None):
 
 @app.get("/stream", name="stream", response_class=StreamingResponse)
 async def stream_energy_data(
-        request: Request, service: EnergyDataService = Depends(get_energy_service)
+    request: Request, service: EnergyDataService = Depends(get_energy_service)
 ):
     """
     Stream the energy data as Server-Sent Events (SSE)
@@ -83,28 +83,32 @@ async def stream_energy_data(
 
 
 @app.post("/trigger-streaming", response_class=HTMLResponse)
-async def trigger_streaming(request: Request,
-                            respondent: Annotated[str, Form()],
-                            category: Annotated[str, Form()],
-                            start_date: Annotated[str, Form()],
-                            end_date: Annotated[str, Form()]):
+async def trigger_streaming(
+    request: Request,
+    respondent: Annotated[str, Form()],
+    type_name: Annotated[str, Form()],
+    start_date: Annotated[str, Form()],
+    end_date: Annotated[str, Form()],
+):
     sse_config = dict(
         listener="hx-sse-listener",
-        path=f'/stream-chart?respondent={respondent}&category={category}&start_date={start_date}&end_date={end_date}',
+        path=f"/stream-chart?respondent={respondent}&type_name={type_name}&start_date={start_date}&end_date={end_date}",
         topics=[CHART_TOPIC, "Terminate"],
     )
-    return templates.TemplateResponse("index.jinja2", {"request": request, "sse_config": sse_config})
+    return templates.TemplateResponse(
+        "index.jinja2", {"request": request, "sse_config": sse_config}
+    )
 
 
 @app.get("/stream-chart", response_class=StreamingResponse)
 async def energy_stream(
-        service: EnergyDataService = Depends(get_energy_service),
-        respondent: str = Query(None),
-        category: str = Query(None),
-        start_date: str = Query(None),
-        end_date: str = Query(None),
+    service: EnergyDataService = Depends(get_energy_service),
+    respondent: str = Query(None),
+    type_name: str = Query(None),
+    start_date: str = Query(None),
+    end_date: str = Query(None),
 ):
-    if not all([respondent, category, start_date, end_date]):
+    if not all([respondent, type_name, start_date, end_date]):
         return JSONResponse(
             status_code=400,
             content={"message": "All parameters must be provided"},
@@ -112,7 +116,7 @@ async def energy_stream(
 
     params = StreamChartDataRequest(
         respondent=respondent,
-        category=category,
+        type_name=type_name,
         start_date=start_date,
         end_date=end_date,
     )
@@ -154,10 +158,18 @@ async def energy_stream(
             div, script = await create_chart(chart_state)
             context = await create_context(div, script)
             if await handle_termination_condition(energy_data):
-                yield render_chunk("Terminate", "", attrs={"id": "hx-sse-listener", "hx-swap-oob": "true"})
+                yield render_chunk(
+                    "Terminate",
+                    "",
+                    attrs={"id": "hx-sse-listener", "hx-swap-oob": "true"},
+                )
                 break
             else:
-                yield render_chunk(CHART_TOPIC, context, attrs={"id": "linechart", "hx-swap-oob": "true"})
+                yield render_chunk(
+                    CHART_TOPIC,
+                    context,
+                    attrs={"id": "linechart", "hx-swap-oob": "true"},
+                )
                 await asyncio.sleep(2)
 
     def prepare_data(chart_state):
@@ -187,8 +199,7 @@ async def energy_stream(
 
         # Convert start_date and end_date from string to datetime
         fig.x_range = Range1d(
-            start=pd.Timestamp(params.start_date),
-            end=pd.Timestamp(params.end_date)
+            start=pd.Timestamp(params.start_date), end=pd.Timestamp(params.end_date)
         )
 
         fig.xaxis.ticker.desired_num_ticks = 24
@@ -230,7 +241,11 @@ async def energy_stream(
     return StreamingResponse(streaming_data(), media_type="text/event-stream")
 
 
-async def buffer_stream(service: EnergyDataService, chart_params: StreamChartDataRequest, row_count=BUFFER_SIZE):
+async def buffer_stream(
+    service: EnergyDataService,
+    chart_params: StreamChartDataRequest,
+    row_count=BUFFER_SIZE,
+):
     buffer = []
     async for energy_data in service.stream_all(row_count, chart_params):
         for data in energy_data:
@@ -249,8 +264,10 @@ async def index(request: Request):
 
 
 @app.post("/api/v1/seed-data/")
-async def seed_energy_data(request_body: EnergyDataRequest = Body(...),
-                           service: EnergyDataService = Depends(get_energy_service)):
+async def seed_energy_data(
+    request_body: EnergyDataRequest = Body(...),
+    service: EnergyDataService = Depends(get_energy_service),
+):
     return await service.fetch_data(params=request_body.params)
 
 
