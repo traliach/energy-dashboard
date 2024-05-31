@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from .database import EnergyDataTable, database
-from .models import EnergyData
+from .models import EnergyData, StreamChartDataRequest
 from .utils import URLBuilder
 
 load_dotenv()
@@ -93,7 +93,9 @@ class EnergyDataService:
             .all()
         )
 
-    async def stream_all(self, row_count=10, chart_params=None) -> AsyncGenerator['EnergyData', None]:
+    async def stream_all(
+        self, row_count=10, chart_params: StreamChartDataRequest = None
+    ) -> AsyncGenerator[EnergyData, None]:
         stmt = await self.prepare_stmt(chart_params, row_count)
         results_stream = await self.async_db.stream(stmt)
         buffer = []
@@ -110,18 +112,17 @@ class EnergyDataService:
             yield buffer
 
     @staticmethod
-    async def prepare_stmt(params, row_count):
+    async def prepare_stmt(params: StreamChartDataRequest, row_count):
         if params:
             # Convert start_date and end_date from string to datetime
             try:
-                start_date = datetime.strptime(params.start_date, "%Y-%m-%d %H:%M:%S.%f")
+                start_date = datetime.strptime(
+                    params.start_date, "%Y-%m-%d %H:%M:%S.%f"
+                )
                 end_date = datetime.strptime(params.end_date, "%Y-%m-%d %H:%M:%S.%f")
             except ValueError:
                 start_date = datetime.strptime(params.start_date, "%Y-%m-%d")
                 end_date = datetime.strptime(params.end_date, "%Y-%m-%d")
-
-            # Convert EnergyType enum to string
-            category = params.category.value
 
             stmt = (
                 select(EnergyDataTable)
@@ -130,7 +131,7 @@ class EnergyDataService:
                         EnergyDataTable.respondent == params.respondent,
                         EnergyDataTable.period >= start_date,
                         EnergyDataTable.period <= end_date,
-                        EnergyDataTable.type_name == category,
+                        EnergyDataTable.type_name == params.type_name.value,
                     )
                 )
                 .order_by(EnergyDataTable.respondent, EnergyDataTable.period)
